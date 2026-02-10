@@ -3,7 +3,7 @@
 Audio Webpage Briefer - Native Messaging Host
 
 This script receives article content from the Chrome extension,
-summarizes it using Claude, and generates audio using sag (ElevenLabs TTS).
+summarizes it using Claude, and generates audio using Piper TTS.
 """
 
 import json
@@ -15,13 +15,15 @@ from datetime import datetime
 from pathlib import Path
 
 # Configuration
-SAG_PATH = "/opt/homebrew/bin/sag"  # ElevenLabs TTS CLI
-OUTPUT_DIR = os.path.expanduser("~/Downloads/audio-briefings")
+SCRIPT_DIR = Path(__file__).parent
+VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
+PIPER_MODEL = Path.home() / ".local/share/piper/en_US-lessac-medium.onnx"
+OUTPUT_DIR = Path.home() / "Downloads/audio-briefings"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # Try to load from .env if not in environment
 if not ANTHROPIC_API_KEY:
-    env_path = Path(__file__).parent / ".env"
+    env_path = SCRIPT_DIR / ".env"
     if env_path.exists():
         with open(env_path) as f:
             for line in f:
@@ -79,76 +81,69 @@ Article Content:
 Now provide the conversational summary:"""
 
     try:
-        # Use anthropic SDK if available, otherwise fall back to curl
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return response.content[0].text
-        except ImportError:
-            # Fall back to curl
-            payload = {
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 1024,
-                "messages": [{"role": "user", "content": prompt}]
-            }
-
-            result = subprocess.run(
-                [
-                    "curl", "-s", "https://api.anthropic.com/v1/messages",
-                    "-H", f"x-api-key: {ANTHROPIC_API_KEY}",
-                    "-H", "anthropic-version: 2023-06-01",
-                    "-H", "content-type: application/json",
-                    "-d", json.dumps(payload)
-                ],
-                capture_output=True,
-                text=True
-            )
-
-            response = json.loads(result.stdout)
-            return response["content"][0]["text"]
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
 
     except Exception as e:
         raise Exception(f"Claude summarization failed: {str(e)}")
 
 
 def generate_audio(text: str, config: dict) -> tuple[str, str]:
-    """Generate audio using sag (ElevenLabs TTS)."""
+    """Generate audio using Piper TTS."""
 
     # Ensure output directory exists
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Generate filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = os.path.join(OUTPUT_DIR, f"briefing_{timestamp}.mp3")
+    output_path = OUTPUT_DIR / f"briefing_{timestamp}.wav"
+
+    # Get speed setting (length_scale: lower = faster, 0.7 = 30% faster)
+    length_scale = config.get('lengthScale', 0.7)
 
     try:
-        # Use sag to generate audio
-        # sag write "text" -o output.mp3
+        # Use piper from venv via subprocess
+        # echo "text" | python -m piper --model X --output_file Y
+        piper_cmd = f'''
+import sys
+sys.path.insert(0, "{SCRIPT_DIR / ".venv" / "lib" / "python3.14" / "site-packages"}")
+from piper import PiperVoice
+voice = PiperVoice.load("{PIPER_MODEL}")
+with open("{output_path}", "wb") as f:
+    voice.synthesize("{text.replace('"', '\\"').replace(chr(10), ' ')}", f, length_scale={length_scale})
+'''
+        
+        # Simpler approach: use the piper CLI from venv
         result = subprocess.run(
             [
-                SAG_PATH, "write", text,
-                "-o", output_path,
-                "--model", "eleven_flash_v2_5"  # Fast model for quick generation
+                str(VENV_PYTHON), "-m", "piper",
+                "--model", str(PIPER_MODEL),
+                "--length_scale", str(length_scale),
+                "--output_file", str(output_path)
             ],
+            input=text,
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout
+            timeout=120
         )
 
         if result.returncode != 0:
-            raise Exception(f"sag failed: {result.stderr}")
+            raise Exception(f"Piper failed: {result.stderr}")
 
-        # Estimate duration (rough: ~150 words per minute)
+        # Estimate duration (rough: ~150 words per minute at normal speed)
         word_count = len(text.split())
-        duration_mins = word_count / 150
+        # Adjust for speed: length_scale 0.7 means 30% faster
+        adjusted_wpm = 150 / length_scale
+        duration_mins = word_count / adjusted_wpm
         duration_str = f"{int(duration_mins)}:{int((duration_mins % 1) * 60):02d}"
 
-        return output_path, duration_str
+        return str(output_path), duration_str
 
     except subprocess.TimeoutExpired:
         raise Exception("Audio generation timed out")
@@ -181,7 +176,7 @@ def main():
                 # Step 2: Generate audio
                 send_message({
                     "status": "progress",
-                    "message": "Generating audio with ElevenLabs..."
+                    "message": "Generating audio with Piper..."
                 })
 
                 audio_path, duration = generate_audio(summary, config)
