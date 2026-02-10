@@ -60,12 +60,17 @@ def read_message():
     return json.loads(message)
 
 
-def add_paragraph_pauses(text: str) -> str:
-    """Add extra line breaks between paragraphs for longer pauses."""
-    # Split on double newlines (paragraph breaks) and rejoin with extra spacing
+def generate_silence(duration_secs: float) -> bytes:
+    """Generate silent audio bytes for the given duration."""
+    num_samples = int(SAMPLE_RATE * duration_secs)
+    # 16-bit silence = zero bytes
+    return b'\x00\x00' * num_samples
+
+
+def split_into_paragraphs(text: str) -> list[str]:
+    """Split text into paragraphs, filtering out empty ones."""
     paragraphs = text.split('\n\n')
-    # Join with triple newlines - Piper treats each newline as a pause
-    return '\n\n\n'.join(paragraphs)
+    return [p.strip() for p in paragraphs if p.strip()]
 
 
 def stream_audio(text: str, title: str, config: dict):
@@ -73,10 +78,8 @@ def stream_audio(text: str, title: str, config: dict):
     
     length_scale = config.get('lengthScale', 0.83)
     sentence_silence = config.get('sentenceSilence', 0.3)
+    paragraph_silence = config.get('paragraphSilence', 0.8)  # Longer pause between paragraphs
     chunk_size = config.get('chunkSize', 22050 * 2)  # ~1 second of audio
-    
-    # Add paragraph pauses
-    text = add_paragraph_pauses(text)
     
     if not VENV_PYTHON.exists():
         raise Exception(f"Python venv not found. Run install.sh again.")
@@ -91,50 +94,63 @@ def stream_audio(text: str, title: str, config: dict):
         "channels": CHANNELS
     })
     
-    # Start Piper with raw output streaming
-    process = subprocess.Popen(
-        [
-            str(VENV_PYTHON), "-m", "piper",
-            "--model", str(PIPER_MODEL),
-            "--length_scale", str(length_scale),
-            "--sentence_silence", str(sentence_silence),
-            "--output-raw"
-        ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+    # Split into paragraphs for natural pauses
+    paragraphs = split_into_paragraphs(text)
     
-    # Send text to Piper
-    process.stdin.write(text.encode('utf-8'))
-    process.stdin.close()
-    
-    # Stream audio chunks
     chunk_index = 0
     total_bytes = 0
+    silence_chunk = generate_silence(paragraph_silence)
     
-    while True:
-        chunk = process.stdout.read(chunk_size)
-        if not chunk:
-            break
+    for para_idx, paragraph in enumerate(paragraphs):
+        # Start Piper for this paragraph
+        process = subprocess.Popen(
+            [
+                str(VENV_PYTHON), "-m", "piper",
+                "--model", str(PIPER_MODEL),
+                "--length_scale", str(length_scale),
+                "--sentence_silence", str(sentence_silence),
+                "--output-raw"
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
         
-        total_bytes += len(chunk)
-        chunk_index += 1
+        # Send paragraph text to Piper
+        process.stdin.write(paragraph.encode('utf-8'))
+        process.stdin.close()
         
-        # Send chunk as base64
-        send_message({
-            "status": "audioChunk",
-            "chunk": base64.b64encode(chunk).decode('ascii'),
-            "chunkIndex": chunk_index
-        })
-    
-    # Wait for process to complete
-    process.wait()
-    
-    if process.returncode != 0:
-        stderr = process.stderr.read().decode('utf-8')
-        log_error(f"Piper stderr: {stderr}")
-        raise Exception(f"Piper failed: {stderr}")
+        # Stream audio chunks for this paragraph
+        while True:
+            chunk = process.stdout.read(chunk_size)
+            if not chunk:
+                break
+            
+            total_bytes += len(chunk)
+            chunk_index += 1
+            
+            send_message({
+                "status": "audioChunk",
+                "chunk": base64.b64encode(chunk).decode('ascii'),
+                "chunkIndex": chunk_index
+            })
+        
+        process.wait()
+        
+        if process.returncode != 0:
+            stderr = process.stderr.read().decode('utf-8')
+            log_error(f"Piper stderr: {stderr}")
+            raise Exception(f"Piper failed: {stderr}")
+        
+        # Insert silence between paragraphs (not after the last one)
+        if para_idx < len(paragraphs) - 1:
+            total_bytes += len(silence_chunk)
+            chunk_index += 1
+            send_message({
+                "status": "audioChunk",
+                "chunk": base64.b64encode(silence_chunk).decode('ascii'),
+                "chunkIndex": chunk_index
+            })
     
     # Calculate duration
     total_samples = total_bytes // SAMPLE_WIDTH
@@ -169,42 +185,61 @@ def download_audio(text: str, title: str, config: dict) -> tuple[str, str, int]:
     
     length_scale = config.get('lengthScale', 0.83)
     sentence_silence = config.get('sentenceSilence', 0.3)
-    
-    # Add paragraph pauses
-    text = add_paragraph_pauses(text)
+    paragraph_silence = config.get('paragraphSilence', 0.8)
     
     if not VENV_PYTHON.exists():
         raise Exception(f"Python venv not found. Run install.sh again.")
     if not PIPER_MODEL.exists():
         raise Exception(f"Piper model not found. Run install.sh again.")
     
-    result = subprocess.run(
-        [
-            str(VENV_PYTHON), "-m", "piper",
-            "--model", str(PIPER_MODEL),
-            "--length_scale", str(length_scale),
-            "--sentence_silence", str(sentence_silence),
-            "--output_file", str(output_path)
-        ],
-        input=text,
-        capture_output=True,
-        text=True,
-        timeout=300
-    )
+    # Split into paragraphs and process each
+    paragraphs = split_into_paragraphs(text)
+    silence_chunk = generate_silence(paragraph_silence)
+    all_audio = b''
     
-    if result.returncode != 0:
-        log_error(f"Piper stderr: {result.stderr}")
-        raise Exception(f"Piper failed: {result.stderr}")
+    for para_idx, paragraph in enumerate(paragraphs):
+        result = subprocess.run(
+            [
+                str(VENV_PYTHON), "-m", "piper",
+                "--model", str(PIPER_MODEL),
+                "--length_scale", str(length_scale),
+                "--sentence_silence", str(sentence_silence),
+                "--output-raw"
+            ],
+            input=paragraph,
+            capture_output=True,
+            text=False,  # Binary output
+            timeout=300
+        )
+        
+        if result.returncode != 0:
+            log_error(f"Piper stderr: {result.stderr.decode('utf-8')}")
+            raise Exception(f"Piper failed: {result.stderr.decode('utf-8')}")
+        
+        all_audio += result.stdout
+        
+        # Add silence between paragraphs (not after the last one)
+        if para_idx < len(paragraphs) - 1:
+            all_audio += silence_chunk
     
-    # Calculate duration
+    # Write combined audio to WAV file
+    with wave.open(str(output_path), 'wb') as wav_file:
+        wav_file.setnchannels(CHANNELS)
+        wav_file.setsampwidth(SAMPLE_WIDTH)
+        wav_file.setframerate(SAMPLE_RATE)
+        wav_file.writeframes(all_audio)
+    
+    # Calculate duration from actual audio length
     word_count = len(text.split())
-    adjusted_wpm = 150 / length_scale
-    duration_mins = word_count / adjusted_wpm
+    total_samples = len(all_audio) // SAMPLE_WIDTH
+    duration_secs = total_samples / SAMPLE_RATE
     
-    if duration_mins < 1:
-        duration_str = f"{int(duration_mins * 60)}s"
+    if duration_secs < 60:
+        duration_str = f"{int(duration_secs)}s"
     else:
-        duration_str = f"{int(duration_mins)}:{int((duration_mins % 1) * 60):02d}"
+        mins = int(duration_secs // 60)
+        secs = int(duration_secs % 60)
+        duration_str = f"{mins}:{secs:02d}"
     
     return str(output_path), duration_str, word_count
 
