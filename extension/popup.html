@@ -50,42 +50,6 @@
       color: #888;
     }
 
-    .controls {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
-    .mode-toggle {
-      display: flex;
-      background: #16213e;
-      border-radius: 6px;
-      padding: 4px;
-      flex: 1;
-    }
-
-    .mode-btn {
-      flex: 1;
-      padding: 8px 12px;
-      border: none;
-      background: transparent;
-      color: #888;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-
-    .mode-btn.active {
-      background: #0f3460;
-      color: #fff;
-    }
-
-    .mode-btn:hover:not(.active) {
-      color: #ccc;
-    }
-
     .generate-btn {
       width: 100%;
       padding: 14px;
@@ -139,18 +103,28 @@
       color: #f87171;
     }
 
-    .audio-player {
+    .result {
       margin-top: 12px;
+      padding: 10px;
+      background: #16213e;
+      border-radius: 6px;
       display: none;
     }
 
-    .audio-player.visible {
+    .result.visible {
       display: block;
     }
 
-    audio {
-      width: 100%;
-      height: 40px;
+    .result-path {
+      font-size: 11px;
+      color: #888;
+      word-break: break-all;
+    }
+
+    .result-duration {
+      font-size: 13px;
+      color: #4ade80;
+      margin-top: 4px;
     }
 
     .footer {
@@ -164,32 +138,26 @@
   </style>
 </head>
 <body>
-  <h1><span>🎧</span> Audio Briefer</h1>
+  <h1><span>🎧</span> Read to Me</h1>
 
   <div class="article-info">
     <div class="article-title" id="articleTitle">Loading article...</div>
     <div class="article-meta" id="articleMeta"></div>
   </div>
 
-  <div class="controls">
-    <div class="mode-toggle">
-      <button class="mode-btn active" data-mode="quick">Quick (1-2 min)</button>
-      <button class="mode-btn" data-mode="deep">Deep (3-5 min)</button>
-    </div>
-  </div>
-
   <button class="generate-btn" id="generateBtn">
-    🎙️ Generate Briefing
+    🔊 Generate Audio
   </button>
 
   <div class="status" id="status"></div>
 
-  <div class="audio-player" id="audioPlayer">
-    <audio controls id="audio"></audio>
+  <div class="result" id="result">
+    <div class="result-duration" id="resultDuration"></div>
+    <div class="result-path" id="resultPath"></div>
   </div>
 
   <div class="footer">
-    Powered by Claude AI + Piper TTS
+    Powered by Piper TTS
   </div>
 
   <script src="popup.js"></script>

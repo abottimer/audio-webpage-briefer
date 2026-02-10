@@ -1,21 +1,12 @@
 // Audio Webpage Briefer - Popup Script
+// V1: Read full article text aloud
 
-let selectedMode = 'quick';
 let currentArticle = null;
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
-  // Set up mode toggle
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedMode = btn.dataset.mode;
-    });
-  });
-
   // Set up generate button
-  document.getElementById('generateBtn').addEventListener('click', generateBriefing);
+  document.getElementById('generateBtn').addEventListener('click', generateAudio);
 
   // Get current tab and extract article
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -43,12 +34,12 @@ function displayArticleInfo(article) {
   titleEl.textContent = article.title || 'Untitled Page';
 
   const wordCount = article.textContent ? article.textContent.split(/\s+/).length : 0;
-  const readTime = Math.ceil(wordCount / 200); // ~200 wpm average reading speed
+  const readTime = Math.ceil(wordCount / 150); // ~150 wpm at 0.7 speed
 
-  metaEl.textContent = `~${wordCount.toLocaleString()} words • ${readTime} min read`;
+  metaEl.textContent = `~${wordCount.toLocaleString()} words • ~${readTime} min audio`;
 }
 
-async function generateBriefing() {
+async function generateAudio() {
   if (!currentArticle) {
     showStatus('error', 'No article content available');
     return;
@@ -56,8 +47,8 @@ async function generateBriefing() {
 
   const btn = document.getElementById('generateBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ Summarizing...';
-  showStatus('loading', 'Sending to Claude for summarization...');
+  btn.textContent = '⏳ Generating...';
+  showStatus('loading', 'Converting text to speech...');
 
   try {
     // Send to native messaging host
@@ -67,33 +58,29 @@ async function generateBriefing() {
         title: currentArticle.title,
         content: currentArticle.textContent,
         url: currentArticle.url
-      },
-      mode: selectedMode
+      }
     });
 
     if (response.error) {
       throw new Error(response.error);
     }
 
-    btn.textContent = '🔊 Generating audio...';
-    showStatus('loading', 'Converting summary to speech with Piper...');
-
-    // Wait for audio generation (response should include audio path or data)
-    if (response.audioUrl) {
-      const audioEl = document.getElementById('audio');
-      audioEl.src = response.audioUrl;
-      document.getElementById('audioPlayer').classList.add('visible');
-      showStatus('success', `✓ Briefing ready! (${response.duration})`);
-      audioEl.play();
-    } else if (response.audioPath) {
-      showStatus('success', `✓ Audio saved to: ${response.audioPath}`);
-    }
+    // Show success
+    showStatus('success', '✓ Audio generated!');
+    
+    const resultEl = document.getElementById('result');
+    const durationEl = document.getElementById('resultDuration');
+    const pathEl = document.getElementById('resultPath');
+    
+    durationEl.textContent = `Duration: ${response.duration} • ${response.wordCount?.toLocaleString() || '?'} words`;
+    pathEl.textContent = response.audioPath;
+    resultEl.classList.add('visible');
 
   } catch (error) {
     showStatus('error', `Error: ${error.message}`);
   } finally {
     btn.disabled = false;
-    btn.textContent = '🎙️ Generate Briefing';
+    btn.textContent = '🔊 Generate Audio';
   }
 }
 

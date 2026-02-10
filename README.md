@@ -1,21 +1,19 @@
-# Audio Webpage Briefer
+# Read to Me
 
-Chrome extension that AI-summarizes any webpage and generates audio briefings using Piper TTS.
+Chrome extension that converts any article to audio using local text-to-speech.
 
 ## Features
 
-- **AI Summarization**: Uses Claude to create conversational summaries (not word-for-word reading)
-- **Two Modes**: Quick (1-2 min) or Deep (3-5 min) briefings
-- **Local TTS**: Fast, private audio generation with Piper (no cloud dependency)
-- **Personal Assistant Tone**: "Here's what this article is about..." style briefings
-- **30% Faster Speech**: Optimized for efficient listening
+- **One-click audio**: Turn any article into a spoken audio file
+- **Local TTS**: Fast, private audio generation with Piper (no cloud/API needed)
+- **30% faster speech**: Optimized for efficient listening
+- **Clean extraction**: Uses Readability.js to pull just the article content
 
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
 - Chrome browser
 - Python 3.10+
-- Anthropic API key (Claude)
 
 ## Installation
 
@@ -28,7 +26,7 @@ cd audio-webpage-briefer
 # Create Python venv and install dependencies
 python3 -m venv native-host/.venv
 source native-host/.venv/bin/activate
-pip install piper-tts pathvalidate anthropic
+pip install piper-tts pathvalidate
 ```
 
 ### 2. Download Piper voice model
@@ -41,15 +39,7 @@ curl -L 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessa
   -o ~/.local/share/piper/en_US-lessac-medium.onnx.json
 ```
 
-### 3. Set up API key
-
-Create `native-host/.env`:
-
-```bash
-echo "ANTHROPIC_API_KEY=your-api-key-here" > native-host/.env
-```
-
-### 4. Load the Chrome Extension
+### 3. Load the Chrome Extension
 
 1. Open Chrome → `chrome://extensions/`
 2. Enable "Developer mode" (toggle in top right)
@@ -57,7 +47,7 @@ echo "ANTHROPIC_API_KEY=your-api-key-here" > native-host/.env
 4. Select the `extension` folder
 5. Copy the Extension ID shown
 
-### 5. Run the Install Script
+### 4. Run the Install Script
 
 ```bash
 chmod +x install.sh
@@ -68,50 +58,39 @@ chmod +x install.sh
 ## Usage
 
 1. Visit any article or blog post
-2. Click the Audio Briefer extension icon
-3. Choose Quick (1-2 min) or Deep (3-5 min) mode
-4. Click "Generate Briefing"
-5. Audio saves to `~/Downloads/audio-briefings/`
+2. Click the "Read to Me" extension icon
+3. Click "Generate Audio"
+4. Audio saves to `~/Downloads/audio-briefings/`
 
 ## How It Works
 
-1. **Extract**: Readability.js pulls the article content from the page
-2. **Summarize**: Claude creates a conversational summary in "personal assistant" style
-3. **Speak**: Piper TTS generates natural-sounding audio locally
-4. **Save**: Audio file is saved for playback
+1. **Extract**: Readability.js pulls the article text (no ads, navs, footers)
+2. **Convert**: Piper TTS generates natural-sounding audio locally
+3. **Save**: WAV file saved to Downloads for playback
+
+## Future Ideas
+
+- [ ] AI summarization mode (Claude integration)
+- [ ] Quick/Deep summary options
+- [ ] Playback controls in popup
+- [ ] Safari extension port
 
 ## Project Structure
 
 ```
 audio-webpage-briefer/
 ├── extension/
-│   ├── manifest.json      # Chrome extension manifest (Manifest V3)
-│   ├── popup.html         # Extension popup UI
-│   ├── popup.js           # Popup logic
-│   ├── content.js         # Page content extraction
-│   ├── background.js      # Native messaging bridge
-│   ├── lib/
-│   │   └── Readability.js # Mozilla's article extraction
-│   └── icons/
+│   ├── manifest.json
+│   ├── popup.html / popup.js
+│   ├── content.js
+│   ├── background.js
+│   └── lib/Readability.js
 ├── native-host/
-│   ├── audio_briefer_host.py  # Python native messaging host
-│   ├── com.claudebot.audio_briefer.json  # Host manifest
-│   ├── .venv/             # Python virtual environment
-│   └── .env               # API keys (create this)
-├── install.sh             # Installation script
+│   ├── audio_briefer_host.py
+│   └── .venv/
+├── install.sh
 └── README.md
 ```
-
-## Configuration
-
-### Speed Adjustment
-
-Default is `length_scale: 0.7` (30% faster than normal). Edit in the config or background.js.
-
-### Voice Selection
-
-Uses `en_US-lessac-medium` by default. Other voices available at:
-https://huggingface.co/rhasspy/piper-voices
 
 ## License
 

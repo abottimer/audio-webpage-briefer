@@ -6,29 +6,26 @@ const NATIVE_HOST = 'com.claudebot.audio_briefer';
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'generateBriefing') {
-    generateBriefing(request.article, request.mode)
+    generateAudio(request.article)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ error: error.message }));
     return true; // Keep channel open for async response
   }
 });
 
-async function generateBriefing(article, mode) {
+async function generateAudio(article) {
   return new Promise((resolve, reject) => {
     // Connect to native messaging host
     const port = chrome.runtime.connectNative(NATIVE_HOST);
 
-    let responseData = '';
-
     port.onMessage.addListener((message) => {
       if (message.status === 'progress') {
-        // Could emit progress events here
         console.log('Progress:', message.message);
       } else if (message.status === 'success') {
         resolve({
           audioPath: message.audioPath,
           duration: message.duration,
-          summary: message.summary
+          wordCount: message.wordCount
         });
       } else if (message.status === 'error') {
         reject(new Error(message.message));
@@ -48,10 +45,8 @@ async function generateBriefing(article, mode) {
     port.postMessage({
       action: 'generate',
       article: article,
-      mode: mode, // 'quick' or 'deep'
       config: {
-        lengthScale: 0.7, // 30% faster speech
-        voice: 'en_US-lessac-medium' // Default voice
+        lengthScale: 0.7  // 30% faster speech
       }
     });
   });
