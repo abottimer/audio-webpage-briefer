@@ -2,6 +2,10 @@
 
 Chrome extension that converts any article to audio using local text-to-speech.
 
+## Demo
+
+https://github.com/abottimer/audio-webpage-briefer/raw/main/demo.mp4
+
 ## Features
 
 - **Instant streaming**: Audio starts playing immediately — no waiting for full generation
