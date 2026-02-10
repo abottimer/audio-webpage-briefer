@@ -73,7 +73,11 @@ function handleBackgroundMessage(message) {
     case 'streamComplete':
       streamingComplete = true;
       showStatus('', `${message.duration}`);
-      // Don't update buttons here — wait for actual playback to finish
+      // Check if playback already finished while waiting for this message
+      // (can happen if audio plays faster than chunks arrive)
+      if (isPlaying && !isPaused && audioQueue.length === 0 && !currentSource) {
+        waitForPlaybackEnd();
+      }
       break;
       
     case 'error':
@@ -145,8 +149,9 @@ function scheduleNextBuffer() {
       // More buffers queued — schedule next
       scheduleNextBuffer();
     } else if (streamingComplete) {
-      // Queue empty and streaming done — playback truly complete
-      playbackComplete();
+      // Queue empty and streaming done — but wait for audio pipeline to flush
+      // Check that we've actually reached the expected end time
+      waitForPlaybackEnd();
     }
     // else: queue empty but streaming not done — wait for more chunks
   };
@@ -239,6 +244,20 @@ function stopPlayback() {
   resetPlaybackState();
   showStatus('', '');
   hideProgress();
+}
+
+function waitForPlaybackEnd() {
+  // Ensure audio has actually finished playing by checking against scheduled end time
+  // This handles audio pipeline latency between onended and actual speaker output
+  const timeUntilEnd = nextPlayTime - audioContext.currentTime;
+  
+  if (timeUntilEnd > 0.05) {
+    // Still have scheduled audio — wait and check again
+    setTimeout(waitForPlaybackEnd, Math.min(timeUntilEnd * 1000, 200));
+  } else {
+    // Add small buffer (250ms) for audio hardware pipeline to fully flush
+    setTimeout(playbackComplete, 250);
+  }
 }
 
 function playbackComplete() {
