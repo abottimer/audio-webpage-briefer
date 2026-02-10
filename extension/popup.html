@@ -10,114 +10,119 @@
     }
 
     body {
-      width: 320px;
-      padding: 16px;
+      width: 300px;
+      padding: 20px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
+      background: #111;
+      color: #fff;
     }
 
-    h1 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 12px;
+    .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #222;
     }
 
-    h1 span {
-      font-size: 20px;
+    .header-icon {
+      font-size: 24px;
     }
 
-    .article-info {
-      background: #16213e;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 16px;
+    .header h1 {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.3px;
+    }
+
+    .article {
+      margin-bottom: 20px;
     }
 
     .article-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 500;
       line-height: 1.4;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
       color: #fff;
     }
 
     .article-meta {
-      font-size: 11px;
-      color: #888;
+      font-size: 12px;
+      color: #666;
     }
 
     .controls {
       display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
-    .btn {
-      flex: 1;
-      padding: 12px 8px;
+    .btn-main {
+      width: 48px;
+      height: 48px;
       border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
+      border-radius: 50%;
+      background: #fff;
+      color: #111;
+      font-size: 18px;
       cursor: pointer;
-      transition: transform 0.1s, opacity 0.2s;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .btn:hover:not(:disabled) {
-      transform: scale(1.02);
+    .btn-main:hover:not(:disabled) {
+      transform: scale(1.05);
+      background: #eee;
     }
 
-    .btn:active:not(:disabled) {
-      transform: scale(0.98);
-    }
-
-    .btn:disabled {
-      opacity: 0.4;
+    .btn-main:disabled {
+      background: #333;
+      color: #666;
       cursor: not-allowed;
-      transform: none;
     }
 
-    .btn-play {
-      background: linear-gradient(135deg, #4ade80, #22c55e);
-      color: #fff;
-    }
-
-    .btn-pause {
-      background: #3b82f6;
-      color: #fff;
-    }
-
-    .btn-stop {
-      background: #ef4444;
-      color: #fff;
-    }
-
-    .btn-download {
-      background: #16213e;
-      color: #888;
+    .btn-secondary {
+      width: 36px;
+      height: 36px;
       border: 1px solid #333;
-      flex: none;
-      width: 44px;
-      padding: 12px;
+      border-radius: 50%;
+      background: transparent;
+      color: #888;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .btn-download:hover:not(:disabled) {
-      border-color: #4ade80;
-      color: #4ade80;
+    .btn-secondary:hover:not(:disabled) {
+      border-color: #555;
+      color: #fff;
+    }
+
+    .btn-secondary:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .spacer {
+      flex: 1;
     }
 
     .progress-container {
       display: none;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }
 
     .progress-bar-bg {
-      height: 4px;
-      background: #16213e;
+      height: 3px;
+      background: #222;
       border-radius: 2px;
       overflow: hidden;
     }
@@ -125,41 +130,35 @@
     .progress-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #4ade80, #22c55e);
-      transition: width 0.3s ease;
+      background: #fff;
+      transition: width 0.2s ease;
     }
 
     .status {
-      padding: 10px;
-      border-radius: 6px;
       font-size: 12px;
-      display: none;
+      color: #666;
       margin-bottom: 12px;
+      display: none;
     }
 
-    .status.loading {
+    .status.visible {
       display: block;
-      background: #16213e;
-      color: #888;
-    }
-
-    .status.success {
-      display: block;
-      background: #0a3d2a;
-      color: #4ade80;
     }
 
     .status.error {
-      display: block;
-      background: #3d0a0a;
-      color: #f87171;
+      color: #e55;
+    }
+
+    .status.success {
+      color: #5a5;
     }
 
     .file-info {
-      padding: 10px;
-      background: #16213e;
-      border-radius: 6px;
+      padding: 12px;
+      background: #1a1a1a;
+      border-radius: 8px;
       display: none;
+      margin-top: 12px;
     }
 
     .file-info.visible {
@@ -168,34 +167,38 @@
 
     .file-path {
       font-size: 10px;
-      color: #666;
+      color: #555;
       word-break: break-all;
-      font-family: monospace;
+      font-family: ui-monospace, monospace;
     }
 
     .footer {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid #333;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #222;
       font-size: 10px;
-      color: #666;
+      color: #444;
       text-align: center;
     }
   </style>
 </head>
 <body>
-  <h1><span>🔈</span> Read to Me</h1>
+  <div class="header">
+    <span class="header-icon">🔈</span>
+    <h1>Read to Me</h1>
+  </div>
 
-  <div class="article-info">
-    <div class="article-title" id="articleTitle">Loading article...</div>
+  <div class="article">
+    <div class="article-title" id="articleTitle">Loading...</div>
     <div class="article-meta" id="articleMeta"></div>
   </div>
 
   <div class="controls">
-    <button class="btn btn-play" id="playBtn">▶️ Play</button>
-    <button class="btn btn-pause" id="pauseBtn" disabled>⏸️ Pause</button>
-    <button class="btn btn-stop" id="stopBtn" disabled>⏹️</button>
-    <button class="btn btn-download" id="downloadBtn" title="Save to file">💾</button>
+    <button class="btn-main" id="playBtn" title="Play">▶</button>
+    <button class="btn-secondary" id="pauseBtn" title="Pause" disabled>⏸</button>
+    <button class="btn-secondary" id="stopBtn" title="Stop" disabled>⏹</button>
+    <span class="spacer"></span>
+    <button class="btn-secondary" id="downloadBtn" title="Download">↓</button>
   </div>
 
   <div class="progress-container" id="progressContainer">
@@ -211,7 +214,7 @@
   </div>
 
   <div class="footer">
-    Powered by Piper TTS • Local & Private
+    Local TTS · Private
   </div>
 
   <script src="popup.js"></script>

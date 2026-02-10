@@ -9,8 +9,7 @@ let isPaused = false;
 let currentSource = null;
 let nextPlayTime = 0;
 let audioFormat = null;
-let totalChunks = 0;
-let playedChunks = 0;
+let streamingComplete = false;
 let backgroundPort = null;
 
 // Initialize popup
@@ -20,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   backgroundPort.onMessage.addListener(handleBackgroundMessage);
   
   // Set up button handlers
-  document.getElementById('playBtn').addEventListener('click', startPlayback);
+  document.getElementById('playBtn').addEventListener('click', handlePlayClick);
   document.getElementById('pauseBtn').addEventListener('click', togglePause);
   document.getElementById('stopBtn').addEventListener('click', stopPlayback);
   document.getElementById('downloadBtn').addEventListener('click', downloadAudio);
@@ -34,29 +33,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentArticle = response.article;
       displayArticleInfo(currentArticle);
     } else {
-      showStatus('error', 'Could not extract article from this page');
+      showStatus('error', 'Could not extract article');
       disableAllButtons();
     }
   } catch (error) {
-    showStatus('error', 'Content script not loaded. Try refreshing the page.');
+    showStatus('error', 'Refresh page and try again');
     disableAllButtons();
   }
 });
 
 function displayArticleInfo(article) {
-  document.getElementById('articleTitle').textContent = article.title || 'Untitled Page';
+  document.getElementById('articleTitle').textContent = article.title || 'Untitled';
   
   const wordCount = article.textContent ? article.textContent.split(/\s+/).length : 0;
-  const readTime = Math.ceil(wordCount / 200); // ~200 wpm at 0.7 speed
+  const readTime = Math.ceil(wordCount / 200);
   
   document.getElementById('articleMeta').textContent = 
-    `~${wordCount.toLocaleString()} words • ~${readTime} min`;
+    `${wordCount.toLocaleString()} words · ~${readTime} min`;
 }
 
 function handleBackgroundMessage(message) {
   switch (message.status) {
     case 'progress':
-      showStatus('loading', message.message);
+      showStatus('', message.message);
       break;
       
     case 'audioFormat':
@@ -72,9 +71,9 @@ function handleBackgroundMessage(message) {
       break;
       
     case 'streamComplete':
-      totalChunks = message.totalChunks;
-      showStatus('success', `✓ ${message.duration} of audio`);
-      document.getElementById('playBtn').disabled = true;
+      streamingComplete = true;
+      showStatus('', `${message.duration}`);
+      // Don't update buttons here — wait for actual playback to finish
       break;
       
     case 'error':
@@ -115,15 +114,20 @@ function handleAudioChunk(base64Chunk, chunkIndex) {
     scheduleNextBuffer();
   }
   
-  // Update progress
-  updateProgress(chunkIndex);
+  updateProgress();
 }
 
 function scheduleNextBuffer() {
-  if (audioQueue.length === 0 || isPaused || !isPlaying) return;
+  if (audioQueue.length === 0 || isPaused || !isPlaying) {
+    // Check if we're done
+    if (audioQueue.length === 0 && streamingComplete && isPlaying) {
+      // No more buffers and streaming is done — playback complete
+      playbackComplete();
+    }
+    return;
+  }
   
   const buffer = audioQueue.shift();
-  playedChunks++;
   
   const source = audioContext.createBufferSource();
   source.buffer = buffer;
@@ -136,17 +140,23 @@ function scheduleNextBuffer() {
   
   currentSource = source;
   
-  // Schedule next buffer
+  // When this buffer finishes, schedule the next one
   source.onended = () => {
     if (isPlaying && !isPaused) {
       scheduleNextBuffer();
     }
-    
-    // Check if playback complete
-    if (audioQueue.length === 0 && totalChunks > 0 && playedChunks >= totalChunks) {
-      playbackComplete();
-    }
   };
+}
+
+function handlePlayClick() {
+  const playBtn = document.getElementById('playBtn');
+  
+  if (playBtn.textContent === '↻') {
+    // Replay - reset and start again
+    startPlayback();
+  } else {
+    startPlayback();
+  }
 }
 
 function startPlayback() {
@@ -155,22 +165,26 @@ function startPlayback() {
   // Initialize audio context (must be after user gesture)
   if (!audioContext) {
     audioContext = new AudioContext({ sampleRate: 22050 });
+  } else if (audioContext.state === 'suspended') {
+    audioContext.resume();
   }
   
   // Reset state
   audioQueue = [];
   isPlaying = true;
   isPaused = false;
-  totalChunks = 0;
-  playedChunks = 0;
+  streamingComplete = false;
   nextPlayTime = 0;
   
   // Update UI
-  document.getElementById('playBtn').disabled = true;
+  const playBtn = document.getElementById('playBtn');
+  playBtn.disabled = true;
+  playBtn.textContent = '•••';
   document.getElementById('pauseBtn').disabled = false;
   document.getElementById('stopBtn').disabled = false;
   document.getElementById('downloadBtn').disabled = true;
-  showStatus('loading', 'Starting playback...');
+  
+  showStatus('', 'Starting...');
   showProgress();
   
   // Request streaming from background
@@ -192,13 +206,13 @@ function togglePause() {
   if (isPaused) {
     // Resume
     isPaused = false;
-    pauseBtn.textContent = '⏸️ Pause';
+    pauseBtn.textContent = '⏸';
     audioContext.resume();
     scheduleNextBuffer();
   } else {
     // Pause
     isPaused = true;
-    pauseBtn.textContent = '▶️ Resume';
+    pauseBtn.textContent = '▶';
     audioContext.suspend();
   }
 }
@@ -206,6 +220,7 @@ function togglePause() {
 function stopPlayback() {
   isPlaying = false;
   isPaused = false;
+  streamingComplete = false;
   audioQueue = [];
   
   if (currentSource) {
@@ -224,21 +239,32 @@ function stopPlayback() {
 
 function playbackComplete() {
   isPlaying = false;
-  document.getElementById('playBtn').disabled = false;
-  document.getElementById('playBtn').textContent = '🔄 Replay';
+  
+  const playBtn = document.getElementById('playBtn');
+  playBtn.disabled = false;
+  playBtn.textContent = '↻';
+  playBtn.title = 'Replay';
+  
   document.getElementById('pauseBtn').disabled = true;
+  document.getElementById('pauseBtn').textContent = '⏸';
   document.getElementById('stopBtn').disabled = true;
   document.getElementById('downloadBtn').disabled = false;
+  
+  showStatus('success', 'Done');
 }
 
 function resetPlaybackState() {
   isPlaying = false;
   isPaused = false;
+  streamingComplete = false;
   
-  document.getElementById('playBtn').disabled = false;
-  document.getElementById('playBtn').textContent = '▶️ Play';
+  const playBtn = document.getElementById('playBtn');
+  playBtn.disabled = false;
+  playBtn.textContent = '▶';
+  playBtn.title = 'Play';
+  
   document.getElementById('pauseBtn').disabled = true;
-  document.getElementById('pauseBtn').textContent = '⏸️ Pause';
+  document.getElementById('pauseBtn').textContent = '⏸';
   document.getElementById('stopBtn').disabled = true;
   document.getElementById('downloadBtn').disabled = false;
 }
@@ -248,8 +274,7 @@ async function downloadAudio() {
   
   const downloadBtn = document.getElementById('downloadBtn');
   downloadBtn.disabled = true;
-  downloadBtn.textContent = '⏳ Saving...';
-  showStatus('loading', 'Generating audio file...');
+  showStatus('', 'Saving...');
   
   try {
     const response = await chrome.runtime.sendMessage({
@@ -265,39 +290,41 @@ async function downloadAudio() {
       throw new Error(response.error);
     }
     
-    showStatus('success', `✓ Saved to Downloads`);
+    showStatus('success', 'Saved to Downloads');
     document.getElementById('filePath').textContent = response.audioPath;
     document.getElementById('fileInfo').classList.add('visible');
     
   } catch (error) {
-    showStatus('error', `Error: ${error.message}`);
+    showStatus('error', error.message);
   } finally {
     downloadBtn.disabled = false;
-    downloadBtn.textContent = '💾 Download';
   }
 }
 
 function showStatus(type, message) {
   const statusEl = document.getElementById('status');
-  statusEl.className = `status ${type}`;
+  statusEl.className = `status ${type ? type : ''} ${message ? 'visible' : ''}`;
   statusEl.textContent = message;
-  statusEl.style.display = message ? 'block' : 'none';
 }
 
 function showProgress() {
   document.getElementById('progressContainer').style.display = 'block';
+  document.getElementById('progressBar').style.width = '0%';
 }
 
 function hideProgress() {
   document.getElementById('progressContainer').style.display = 'none';
 }
 
-function updateProgress(chunkIndex) {
-  // Estimate progress (we don't know total until complete)
+function updateProgress() {
   const bar = document.getElementById('progressBar');
-  // Use logarithmic scale since we don't know the end
-  const progress = Math.min(95, (chunkIndex / (chunkIndex + 5)) * 100);
-  bar.style.width = `${progress}%`;
+  if (streamingComplete) {
+    bar.style.width = '100%';
+  } else {
+    // Pulse animation effect during streaming
+    const current = parseFloat(bar.style.width) || 0;
+    bar.style.width = `${Math.min(95, current + 2)}%`;
+  }
 }
 
 function disableAllButtons() {
