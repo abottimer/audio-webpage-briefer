@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/Users/smashley/.openclaw/workspace/audio-webpage-briefer/native-host/.venv/bin/python
 """
 Read to Me - Native Messaging Host
 

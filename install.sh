@@ -74,8 +74,9 @@ for candidate in "${PYTHON_CANDIDATES[@]}"; do
         fi
     fi
     
-    version=$(check_python_version "$candidate")
-    if [ $? -eq 0 ]; then
+    # check_python_version returns 1 if not suitable, so disable set -e temporarily
+    version=$(check_python_version "$candidate" || true)
+    if [ -n "$version" ]; then
         PYTHON_CMD="$candidate"
         PYTHON_VERSION="$version"
         break
