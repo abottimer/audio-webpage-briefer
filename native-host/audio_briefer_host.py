@@ -68,9 +68,54 @@ def generate_silence(duration_secs: float) -> bytes:
 
 
 def split_into_paragraphs(text: str) -> list[str]:
-    """Split text into paragraphs, filtering out empty ones."""
-    paragraphs = text.split('\n\n')
-    return [p.strip() for p in paragraphs if p.strip()]
+    """Split text into paragraphs, filtering out empty ones.
+    
+    Handles various paragraph separators:
+    - Double newlines (\n\n)
+    - Single newlines (common from Readability.js)
+    - Multiple newlines
+    
+    Combines short lines (< 50 chars) with the next paragraph
+    to avoid treating headers/bylines as separate paragraphs.
+    """
+    # First try splitting on double newlines
+    if '\n\n' in text:
+        paragraphs = text.split('\n\n')
+    else:
+        # Fall back to single newlines
+        paragraphs = text.split('\n')
+    
+    # Filter empty and combine short fragments
+    result = []
+    buffer = ""
+    
+    for p in paragraphs:
+        p = p.strip()
+        if not p:
+            continue
+        
+        # If it's a short line and we have a buffer, combine them
+        if len(p) < 50 and buffer:
+            buffer += " " + p
+        elif len(p) < 50 and not buffer:
+            # Start buffering short lines
+            buffer = p
+        else:
+            # It's a real paragraph
+            if buffer:
+                # Prepend buffered content
+                p = buffer + " " + p
+                buffer = ""
+            result.append(p)
+    
+    # Don't forget any remaining buffer
+    if buffer:
+        if result:
+            result[-1] += " " + buffer
+        else:
+            result.append(buffer)
+    
+    return result if result else [text]
 
 
 def stream_audio(text: str, title: str, config: dict):
