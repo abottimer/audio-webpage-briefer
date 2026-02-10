@@ -50,39 +50,91 @@
       color: #888;
     }
 
-    .generate-btn {
-      width: 100%;
-      padding: 14px;
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 8px;
       border: none;
       border-radius: 8px;
-      background: linear-gradient(135deg, #e94560, #0f3460);
-      color: #fff;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       transition: transform 0.1s, opacity 0.2s;
     }
 
-    .generate-btn:hover {
+    .btn:hover:not(:disabled) {
       transform: scale(1.02);
     }
 
-    .generate-btn:active {
+    .btn:active:not(:disabled) {
       transform: scale(0.98);
     }
 
-    .generate-btn:disabled {
-      opacity: 0.6;
+    .btn:disabled {
+      opacity: 0.4;
       cursor: not-allowed;
       transform: none;
     }
 
+    .btn-play {
+      background: linear-gradient(135deg, #4ade80, #22c55e);
+      color: #fff;
+    }
+
+    .btn-pause {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .btn-stop {
+      background: #ef4444;
+      color: #fff;
+    }
+
+    .btn-download {
+      background: #16213e;
+      color: #888;
+      border: 1px solid #333;
+      flex: none;
+      width: 44px;
+      padding: 12px;
+    }
+
+    .btn-download:hover:not(:disabled) {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+
+    .progress-container {
+      display: none;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-bg {
+      height: 4px;
+      background: #16213e;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #4ade80, #22c55e);
+      transition: width 0.3s ease;
+    }
+
     .status {
-      margin-top: 12px;
       padding: 10px;
       border-radius: 6px;
       font-size: 12px;
       display: none;
+      margin-bottom: 12px;
     }
 
     .status.loading {
@@ -103,28 +155,22 @@
       color: #f87171;
     }
 
-    .result {
-      margin-top: 12px;
+    .file-info {
       padding: 10px;
       background: #16213e;
       border-radius: 6px;
       display: none;
     }
 
-    .result.visible {
+    .file-info.visible {
       display: block;
     }
 
-    .result-path {
-      font-size: 11px;
-      color: #888;
+    .file-path {
+      font-size: 10px;
+      color: #666;
       word-break: break-all;
-    }
-
-    .result-duration {
-      font-size: 13px;
-      color: #4ade80;
-      margin-top: 4px;
+      font-family: monospace;
     }
 
     .footer {
@@ -138,26 +184,34 @@
   </style>
 </head>
 <body>
-  <h1><span>🎧</span> Read to Me</h1>
+  <h1><span>🔈</span> Read to Me</h1>
 
   <div class="article-info">
     <div class="article-title" id="articleTitle">Loading article...</div>
     <div class="article-meta" id="articleMeta"></div>
   </div>
 
-  <button class="generate-btn" id="generateBtn">
-    🔊 Generate Audio
-  </button>
+  <div class="controls">
+    <button class="btn btn-play" id="playBtn">▶️ Play</button>
+    <button class="btn btn-pause" id="pauseBtn" disabled>⏸️ Pause</button>
+    <button class="btn btn-stop" id="stopBtn" disabled>⏹️</button>
+    <button class="btn btn-download" id="downloadBtn" title="Save to file">💾</button>
+  </div>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar-bg">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
 
   <div class="status" id="status"></div>
 
-  <div class="result" id="result">
-    <div class="result-duration" id="resultDuration"></div>
-    <div class="result-path" id="resultPath"></div>
+  <div class="file-info" id="fileInfo">
+    <div class="file-path" id="filePath"></div>
   </div>
 
   <div class="footer">
-    Powered by Piper TTS
+    Powered by Piper TTS • Local & Private
   </div>
 
   <script src="popup.js"></script>

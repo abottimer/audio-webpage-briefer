@@ -4,7 +4,9 @@ Chrome extension that converts any article to audio using local text-to-speech.
 
 ## Features
 
-- **One-click audio**: Turn any article into a spoken audio file
+- **Instant streaming**: Audio starts playing immediately — no waiting for full generation
+- **Playback controls**: Play, pause, stop right in the popup
+- **Download option**: Save audio files for offline listening
 - **Local TTS**: Fast, private audio generation with Piper (no cloud/API needed)
 - **30% faster speech**: Optimized for efficient listening
 - **Clean extraction**: Uses Readability.js to pull just the article content
@@ -59,14 +61,16 @@ chmod +x install.sh
 
 1. Visit any article or blog post
 2. Click the "Read to Me" extension icon
-3. Click "Generate Audio"
-4. Audio saves to `~/Downloads/audio-briefings/`
+3. Click **Play** to start streaming audio immediately
+4. Use **Pause/Stop** to control playback
+5. Click **💾** to download a copy to `~/Downloads/audio-briefings/`
 
 ## How It Works
 
 1. **Extract**: Readability.js pulls the article text (no ads, navs, footers)
-2. **Convert**: Piper TTS generates natural-sounding audio locally
-3. **Save**: WAV file saved to Downloads for playback
+2. **Stream**: Piper TTS generates audio and streams chunks in real-time
+3. **Play**: Web Audio API plays chunks as they arrive — no waiting!
+4. **Download** (optional): Save WAV file to Downloads for offline playback
 
 ## Future Ideas
 
