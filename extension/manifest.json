@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Audio Webpage Briefer",
-  "version": "1.0.0",
-  "description": "AI-powered audio summaries of any webpage",
+  "name": "Read to Me",
+  "version": "1.0.1",
+  "description": "Convert any article to audio with local TTS",
   "permissions": [
     "activeTab",
     "nativeMessaging"
