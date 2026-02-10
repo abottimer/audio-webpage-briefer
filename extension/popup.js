@@ -109,8 +109,9 @@ function handleAudioChunk(base64Chunk, chunkIndex) {
   // Queue for playback
   audioQueue.push(audioBuffer);
   
-  // Start playback if this is the first chunk
-  if (audioQueue.length === 1 && isPlaying && !isPaused) {
+  // Start playback if nothing is currently playing/scheduled
+  // (currentSource is null when no buffer is actively playing)
+  if (!currentSource && isPlaying && !isPaused) {
     scheduleNextBuffer();
   }
   
@@ -136,6 +137,8 @@ function scheduleNextBuffer() {
   
   // When this buffer finishes playing
   source.onended = () => {
+    currentSource = null;  // Clear so new chunks can trigger scheduling
+    
     if (!isPlaying || isPaused) return;
     
     if (audioQueue.length > 0) {
