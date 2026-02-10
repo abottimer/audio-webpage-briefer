@@ -92,6 +92,25 @@ audio-webpage-briefer/
 └── README.md
 ```
 
+## Troubleshooting
+
+### "Native host has exited" error?
+1. Check the error log: `cat ~/Downloads/audio-briefings/error.log`
+2. Re-run `./install.sh`
+3. Make sure the Extension ID matches
+
+### Extension icon not showing?
+- Pin it: Click the puzzle piece icon in Chrome toolbar → Pin "Read to Me"
+
+### "Could not extract article" error?
+- Make sure you're on an actual article page, not a homepage
+- Try a different article
+
+### Python version issues?
+- macOS ships with Python 3.9.6 which doesn't work with piper-tts
+- Install Python 3.12: `brew install python@3.12`
+- Re-run `./install.sh`
+
 ## License
 
 MIT

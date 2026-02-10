@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Audio Webpage Briefer - Native Messaging Host
+Read to Me - Native Messaging Host
 
 Converts webpage article text to speech using Piper TTS.
 V1: Full text read-aloud (no summarization)
@@ -11,6 +11,7 @@ import struct
 import sys
 import subprocess
 import os
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,18 @@ SCRIPT_DIR = Path(__file__).parent
 VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
 PIPER_MODEL = Path.home() / ".local/share/piper/en_US-lessac-medium.onnx"
 OUTPUT_DIR = Path.home() / "Downloads/audio-briefings"
+ERROR_LOG = OUTPUT_DIR / "error.log"
+
+
+def log_error(message: str):
+    """Write error to log file for debugging."""
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(ERROR_LOG, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass  # Can't even log, nothing we can do
 
 
 def send_message(message: dict):
@@ -39,7 +52,7 @@ def read_message():
     return json.loads(message)
 
 
-def generate_audio(text: str, title: str, config: dict) -> tuple[str, str]:
+def generate_audio(text: str, title: str, config: dict) -> tuple[str, str, int]:
     """Generate audio using Piper TTS."""
 
     # Ensure output directory exists
@@ -53,6 +66,14 @@ def generate_audio(text: str, title: str, config: dict) -> tuple[str, str]:
 
     # Get speed setting (length_scale: lower = faster, 0.7 = 30% faster)
     length_scale = config.get('lengthScale', 0.7)
+
+    # Verify venv Python exists
+    if not VENV_PYTHON.exists():
+        raise Exception(f"Python venv not found at {VENV_PYTHON}. Run install.sh again.")
+
+    # Verify model exists
+    if not PIPER_MODEL.exists():
+        raise Exception(f"Piper model not found at {PIPER_MODEL}. Run install.sh again.")
 
     try:
         result = subprocess.run(
@@ -69,6 +90,7 @@ def generate_audio(text: str, title: str, config: dict) -> tuple[str, str]:
         )
 
         if result.returncode != 0:
+            log_error(f"Piper stderr: {result.stderr}")
             raise Exception(f"Piper failed: {result.stderr}")
 
         # Estimate duration
@@ -91,51 +113,57 @@ def generate_audio(text: str, title: str, config: dict) -> tuple[str, str]:
 
 def main():
     """Main loop - process messages from the extension."""
+    try:
+        while True:
+            message = read_message()
+            if message is None:
+                break
 
-    while True:
-        message = read_message()
-        if message is None:
-            break
+            try:
+                if message.get('action') == 'generate':
+                    article = message.get('article', {})
+                    config = message.get('config', {})
+                    
+                    text = article.get('content', '')
+                    title = article.get('title', 'Article')
 
-        try:
-            if message.get('action') == 'generate':
-                article = message.get('article', {})
-                config = message.get('config', {})
-                
-                text = article.get('content', '')
-                title = article.get('title', 'Article')
+                    if not text or len(text.strip()) < 50:
+                        raise Exception("Not enough text content to read")
 
-                if not text or len(text.strip()) < 50:
-                    raise Exception("Not enough text content to read")
+                    # Progress update
+                    word_count = len(text.split())
+                    send_message({
+                        "status": "progress",
+                        "message": f"Generating audio for {word_count:,} words..."
+                    })
 
-                # Progress update
-                word_count = len(text.split())
-                send_message({
-                    "status": "progress",
-                    "message": f"Generating audio for {word_count:,} words..."
-                })
+                    audio_path, duration, words = generate_audio(text, title, config)
 
-                audio_path, duration, words = generate_audio(text, title, config)
+                    # Success!
+                    send_message({
+                        "status": "success",
+                        "audioPath": audio_path,
+                        "duration": duration,
+                        "wordCount": words
+                    })
 
-                # Success!
-                send_message({
-                    "status": "success",
-                    "audioPath": audio_path,
-                    "duration": duration,
-                    "wordCount": words
-                })
+                else:
+                    send_message({
+                        "status": "error",
+                        "message": f"Unknown action: {message.get('action')}"
+                    })
 
-            else:
+            except Exception as e:
+                log_error(f"Request error: {str(e)}\n{traceback.format_exc()}")
                 send_message({
                     "status": "error",
-                    "message": f"Unknown action: {message.get('action')}"
+                    "message": str(e)
                 })
 
-        except Exception as e:
-            send_message({
-                "status": "error",
-                "message": str(e)
-            })
+    except Exception as e:
+        # Fatal error - log it before exiting
+        log_error(f"Fatal error: {str(e)}\n{traceback.format_exc()}")
+        raise
 
 
 if __name__ == "__main__":
