@@ -119,16 +119,10 @@ function handleAudioChunk(base64Chunk, chunkIndex) {
 
 function scheduleNextBuffer() {
   if (audioQueue.length === 0 || isPaused || !isPlaying) {
-    // Check if we're done
-    if (audioQueue.length === 0 && streamingComplete && isPlaying) {
-      // No more buffers and streaming is done — playback complete
-      playbackComplete();
-    }
     return;
   }
   
   const buffer = audioQueue.shift();
-  
   const source = audioContext.createBufferSource();
   source.buffer = buffer;
   source.connect(audioContext.destination);
@@ -140,11 +134,18 @@ function scheduleNextBuffer() {
   
   currentSource = source;
   
-  // When this buffer finishes, schedule the next one
+  // When this buffer finishes playing
   source.onended = () => {
-    if (isPlaying && !isPaused) {
+    if (!isPlaying || isPaused) return;
+    
+    if (audioQueue.length > 0) {
+      // More buffers queued — schedule next
       scheduleNextBuffer();
+    } else if (streamingComplete) {
+      // Queue empty and streaming done — playback truly complete
+      playbackComplete();
     }
+    // else: queue empty but streaming not done — wait for more chunks
   };
 }
 
