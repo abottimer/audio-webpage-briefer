@@ -60,11 +60,23 @@ def read_message():
     return json.loads(message)
 
 
+def add_paragraph_pauses(text: str) -> str:
+    """Add extra line breaks between paragraphs for longer pauses."""
+    # Split on double newlines (paragraph breaks) and rejoin with extra spacing
+    paragraphs = text.split('\n\n')
+    # Join with triple newlines - Piper treats each newline as a pause
+    return '\n\n\n'.join(paragraphs)
+
+
 def stream_audio(text: str, title: str, config: dict):
     """Stream audio chunks to the extension for real-time playback."""
     
-    length_scale = config.get('lengthScale', 0.7)
+    length_scale = config.get('lengthScale', 0.83)
+    sentence_silence = config.get('sentenceSilence', 0.3)
     chunk_size = config.get('chunkSize', 22050 * 2)  # ~1 second of audio
+    
+    # Add paragraph pauses
+    text = add_paragraph_pauses(text)
     
     if not VENV_PYTHON.exists():
         raise Exception(f"Python venv not found. Run install.sh again.")
@@ -85,6 +97,7 @@ def stream_audio(text: str, title: str, config: dict):
             str(VENV_PYTHON), "-m", "piper",
             "--model", str(PIPER_MODEL),
             "--length_scale", str(length_scale),
+            "--sentence_silence", str(sentence_silence),
             "--output-raw"
         ],
         stdin=subprocess.PIPE,
@@ -154,7 +167,11 @@ def download_audio(text: str, title: str, config: dict) -> tuple[str, str, int]:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUT_DIR / f"{safe_title}_{timestamp}.wav"
     
-    length_scale = config.get('lengthScale', 0.7)
+    length_scale = config.get('lengthScale', 0.83)
+    sentence_silence = config.get('sentenceSilence', 0.3)
+    
+    # Add paragraph pauses
+    text = add_paragraph_pauses(text)
     
     if not VENV_PYTHON.exists():
         raise Exception(f"Python venv not found. Run install.sh again.")
@@ -166,6 +183,7 @@ def download_audio(text: str, title: str, config: dict) -> tuple[str, str, int]:
             str(VENV_PYTHON), "-m", "piper",
             "--model", str(PIPER_MODEL),
             "--length_scale", str(length_scale),
+            "--sentence_silence", str(sentence_silence),
             "--output_file", str(output_path)
         ],
         input=text,

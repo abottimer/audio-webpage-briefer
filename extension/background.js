@@ -119,7 +119,8 @@ function streamAudio(article) {
     action: 'stream',
     article: article,
     config: {
-      lengthScale: 0.7
+      lengthScale: 0.83,
+      sentenceSilence: 0.3
     }
   });
 }
@@ -155,7 +156,8 @@ async function downloadAudio(article) {
       action: 'download',
       article: article,
       config: {
-        lengthScale: 0.7
+        lengthScale: 0.83,
+        sentenceSilence: 0.3
       }
     });
   });
