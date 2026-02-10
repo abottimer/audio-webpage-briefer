@@ -3,10 +3,11 @@
 # Read to Me - Installation Script
 #
 # This script:
-# 1. Validates Python version (3.10+ required)
+# 1. Finds a suitable Python (3.10+)
 # 2. Sets up the Python venv with Piper TTS
 # 3. Downloads voice model if needed
-# 4. Registers native messaging host with Chrome
+# 4. Creates wrapper script for native messaging
+# 5. Registers native messaging host with Chrome
 #
 
 set -e
@@ -15,52 +16,114 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOST_NAME="com.claudebot.audio_briefer"
 HOST_SCRIPT="$SCRIPT_DIR/native-host/audio_briefer_host.py"
 WRAPPER_SCRIPT="$SCRIPT_DIR/native-host/run_host.sh"
+VENV_DIR="$SCRIPT_DIR/native-host/.venv"
 
 echo "🎧 Read to Me - Installation"
 echo "========================================"
 echo ""
 
-# Check for Python and validate version
-echo "Checking requirements..."
+# Function to check if a Python is suitable (3.10+)
+check_python_version() {
+    local python_path="$1"
+    if [ ! -x "$python_path" ]; then
+        return 1
+    fi
+    
+    local version=$("$python_path" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+    if [ -z "$version" ]; then
+        return 1
+    fi
+    
+    local major=$(echo "$version" | cut -d. -f1)
+    local minor=$(echo "$version" | cut -d. -f2)
+    
+    if [ "$major" -ge 3 ] && [ "$minor" -ge 10 ]; then
+        echo "$version"
+        return 0
+    fi
+    return 1
+}
 
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 not found!"
-    echo ""
-    echo "Install with:"
-    echo "  brew install python@3.12"
-    exit 1
-fi
+# Find a suitable Python installation
+echo "Looking for Python 3.10+..."
 
-# Check Python version (need 3.10+)
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
-PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
+PYTHON_CMD=""
+PYTHON_VERSION=""
 
-if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
-    echo "❌ Python $PYTHON_VERSION found, but 3.10+ is required"
+# Check common locations in order of preference
+PYTHON_CANDIDATES=(
+    "/opt/homebrew/bin/python3.12"
+    "/opt/homebrew/bin/python3.11"
+    "/opt/homebrew/bin/python3.10"
+    "/opt/homebrew/bin/python3"
+    "/usr/local/bin/python3.12"
+    "/usr/local/bin/python3.11"
+    "/usr/local/bin/python3.10"
+    "/usr/local/bin/python3"
+    "python3.12"
+    "python3.11"
+    "python3.10"
+    "python3"
+)
+
+for candidate in "${PYTHON_CANDIDATES[@]}"; do
+    # Resolve command to full path if needed
+    if [[ "$candidate" != /* ]]; then
+        candidate=$(command -v "$candidate" 2>/dev/null || echo "")
+        if [ -z "$candidate" ]; then
+            continue
+        fi
+    fi
+    
+    version=$(check_python_version "$candidate")
+    if [ $? -eq 0 ]; then
+        PYTHON_CMD="$candidate"
+        PYTHON_VERSION="$version"
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo "❌ No Python 3.10+ found!"
     echo ""
     echo "macOS ships with Python 3.9 which doesn't support piper-tts."
     echo ""
-    echo "Install Python 3.12 with:"
+    echo "Install Python 3.12 with Homebrew:"
     echo "  brew install python@3.12"
     echo ""
     echo "Then run this script again."
     exit 1
 fi
 
-echo "✓ Python $PYTHON_VERSION found"
+echo "✓ Found Python $PYTHON_VERSION at $PYTHON_CMD"
 
-# Step 1: Set up Python venv if needed
-VENV_DIR="$SCRIPT_DIR/native-host/.venv"
+# Step 1: Set up Python venv
+echo ""
+if [ -d "$VENV_DIR" ]; then
+    # Check if existing venv has right Python version
+    VENV_PYTHON="$VENV_DIR/bin/python"
+    if [ -x "$VENV_PYTHON" ]; then
+        VENV_VERSION=$("$VENV_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")
+        if [ "$VENV_VERSION" = "$PYTHON_VERSION" ]; then
+            echo "✓ Python venv already exists (Python $VENV_VERSION)"
+        else
+            echo "Recreating venv (was Python $VENV_VERSION, need $PYTHON_VERSION)..."
+            rm -rf "$VENV_DIR"
+        fi
+    else
+        echo "Recreating venv (broken installation)..."
+        rm -rf "$VENV_DIR"
+    fi
+fi
+
 if [ ! -d "$VENV_DIR" ]; then
-    echo ""
-    echo "Setting up Python virtual environment..."
-    python3 -m venv "$VENV_DIR"
-    source "$VENV_DIR/bin/activate"
-    pip install --quiet piper-tts pathvalidate
+    echo "Creating Python virtual environment..."
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+    
+    echo "Installing dependencies..."
+    "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+    "$VENV_DIR/bin/pip" install --quiet piper-tts pathvalidate
     echo "✓ Installed Piper TTS"
-else
-    echo "✓ Python venv already exists"
 fi
 
 # Step 2: Check/download Piper voice model
@@ -80,28 +143,28 @@ else
     echo "✓ Piper voice model found"
 fi
 
-# Step 3: Create wrapper script (activates venv and runs host)
+# Step 3: Create wrapper script with absolute paths
+# This avoids shebang issues - Chrome calls the wrapper, wrapper calls venv Python
 echo ""
-echo "Creating host wrapper script..."
-cat > "$WRAPPER_SCRIPT" << 'EOF'
+echo "Creating native host wrapper..."
+cat > "$WRAPPER_SCRIPT" << EOF
 #!/bin/bash
-# Wrapper to run the native host with the correct Python venv
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$SCRIPT_DIR/.venv/bin/python" "$SCRIPT_DIR/audio_briefer_host.py"
+# Generated by install.sh - do not edit manually
+# This wrapper ensures the native host runs with the correct Python
+exec "$VENV_DIR/bin/python" "$HOST_SCRIPT" "\$@"
 EOF
 chmod +x "$WRAPPER_SCRIPT"
-chmod +x "$HOST_SCRIPT"
 echo "✓ Created wrapper script"
 
 # Step 4: Get Chrome extension ID
 echo ""
-echo "📋 IMPORTANT: You need your Chrome extension ID"
+echo "📋 You need your Chrome extension ID"
 echo ""
-echo "1. Open Chrome and go to: chrome://extensions/"
+echo "1. Open Chrome → chrome://extensions/"
 echo "2. Enable 'Developer mode' (toggle in top right)"
 echo "3. Click 'Load unpacked' and select:"
 echo "   $SCRIPT_DIR/extension"
-echo "4. Copy the 'ID' shown under the extension name"
+echo "4. Copy the 'ID' shown under the extension"
 echo ""
 read -p "Enter your extension ID: " EXTENSION_ID
 
@@ -110,7 +173,8 @@ if [ -z "$EXTENSION_ID" ]; then
     exit 1
 fi
 
-# Step 5: Create native messaging manifest (points directly to repo, no sudo needed)
+# Step 5: Create native messaging manifest
+# Points to wrapper script, no sudo needed
 MANIFEST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
 mkdir -p "$MANIFEST_DIR"
 
@@ -125,26 +189,21 @@ cat > "$MANIFEST_DIR/$HOST_NAME.json" << EOF
   ]
 }
 EOF
-
 echo "✓ Registered native messaging host"
 
 # Step 6: Create output directory
 mkdir -p "$HOME/Downloads/audio-briefings"
-echo "✓ Created output directory: ~/Downloads/audio-briefings"
+echo "✓ Created output directory"
 
 echo ""
 echo "========================================"
 echo "✅ Installation complete!"
 echo ""
 echo "Next steps:"
-echo "1. Reload the extension in Chrome (chrome://extensions/)"
-echo "2. Visit any article page"
-echo "3. Click the extension icon"
-echo "4. Hit 'Generate Audio'"
+echo "1. Reload the extension in chrome://extensions/"
+echo "2. Visit any article"
+echo "3. Click the extension icon and hit Play"
 echo ""
-echo "Audio files will be saved to:"
-echo "   ~/Downloads/audio-briefings/"
-echo ""
-echo "If you see errors, check:"
-echo "   ~/Downloads/audio-briefings/error.log"
+echo "Troubleshooting:"
+echo "  ~/Downloads/audio-briefings/error.log"
 echo ""
