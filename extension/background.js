@@ -5,6 +5,7 @@ const NATIVE_HOST = 'com.claudebot.audio_briefer';
 
 let activePort = null;
 let popupPort = null;
+let streamResponseCallback = null;
 
 // Listen for popup connection
 chrome.runtime.onConnect.addListener((port) => {
@@ -16,6 +17,10 @@ chrome.runtime.onConnect.addListener((port) => {
       if (activePort) {
         activePort.disconnect();
         activePort = null;
+      }
+      // Clean up pending response
+      if (streamResponseCallback) {
+        streamResponseCallback = null;
       }
     });
   }
@@ -33,24 +38,31 @@ function sendToPopup(message) {
 }
 
 // Listen for messages from popup
+// Using sendMessage + return true keeps the service worker alive
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'stream') {
     streamAudio(request.article);
-    sendResponse({ started: true });
-    return false;
+    // return true keeps SW alive until sendResponse is called
+    streamResponseCallback = sendResponse;
+    return true;
   }
-  
+
   if (request.action === 'download') {
     downloadAudio(request.article)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ error: error.message }));
     return true;
   }
-  
+
   if (request.action === 'stop') {
     if (activePort) {
       activePort.disconnect();
       activePort = null;
+    }
+    // Resolve the pending stream response
+    if (streamResponseCallback) {
+      streamResponseCallback({ stopped: true });
+      streamResponseCallback = null;
     }
     sendResponse({ stopped: true });
     return false;
@@ -62,18 +74,31 @@ function streamAudio(article) {
   if (activePort) {
     activePort.disconnect();
   }
-  
+
   activePort = chrome.runtime.connectNative(NATIVE_HOST);
-  
+
   activePort.onMessage.addListener((message) => {
-    // Forward all messages to popup
+    // Forward all messages to popup via port
     sendToPopup(message);
-    
-    if (message.status === 'streamComplete' || message.status === 'error') {
+
+    if (message.status === 'streamComplete') {
       activePort = null;
+      // Resolve the pending sendResponse to clean up
+      if (streamResponseCallback) {
+        streamResponseCallback({ status: 'streamComplete' });
+        streamResponseCallback = null;
+      }
+    }
+
+    if (message.status === 'error') {
+      activePort = null;
+      if (streamResponseCallback) {
+        streamResponseCallback({ status: 'error', message: message.message });
+        streamResponseCallback = null;
+      }
     }
   });
-  
+
   activePort.onDisconnect.addListener(() => {
     if (chrome.runtime.lastError) {
       sendToPopup({
@@ -82,8 +107,13 @@ function streamAudio(article) {
       });
     }
     activePort = null;
+    // Resolve pending response so SW can clean up
+    if (streamResponseCallback) {
+      streamResponseCallback({ status: 'error', message: 'Native host has exited.' });
+      streamResponseCallback = null;
+    }
   });
-  
+
   // Request streaming
   activePort.postMessage({
     action: 'stream',
@@ -97,7 +127,7 @@ function streamAudio(article) {
 async function downloadAudio(article) {
   return new Promise((resolve, reject) => {
     const port = chrome.runtime.connectNative(NATIVE_HOST);
-    
+
     port.onMessage.addListener((message) => {
       if (message.status === 'progress') {
         sendToPopup(message);
@@ -111,7 +141,7 @@ async function downloadAudio(article) {
         reject(new Error(message.message));
       }
     });
-    
+
     port.onDisconnect.addListener(() => {
       if (chrome.runtime.lastError) {
         reject(new Error(
@@ -120,7 +150,7 @@ async function downloadAudio(article) {
         ));
       }
     });
-    
+
     port.postMessage({
       action: 'download',
       article: article,

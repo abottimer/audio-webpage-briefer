@@ -19,43 +19,25 @@ Chrome extension that converts any article to audio using local text-to-speech.
 
 ## Installation
 
-### 1. Clone and set up Python environment
-
 ```bash
 git clone https://github.com/abottimer/audio-webpage-briefer.git
 cd audio-webpage-briefer
-
-# Create Python venv and install dependencies
-python3 -m venv native-host/.venv
-source native-host/.venv/bin/activate
-pip install piper-tts pathvalidate
-```
-
-### 2. Download Piper voice model
-
-```bash
-mkdir -p ~/.local/share/piper
-curl -L 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx' \
-  -o ~/.local/share/piper/en_US-lessac-medium.onnx
-curl -L 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json' \
-  -o ~/.local/share/piper/en_US-lessac-medium.onnx.json
-```
-
-### 3. Load the Chrome Extension
-
-1. Open Chrome → `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the `extension` folder
-5. Copy the Extension ID shown
-
-### 4. Run the Install Script
-
-```bash
 chmod +x install.sh
 ./install.sh
-# Enter your extension ID when prompted
 ```
+
+The install script will:
+1. Find Python 3.10+ (or tell you to install it)
+2. Create a venv and install Piper TTS
+3. Download the voice model (~100MB)
+4. Configure the native messaging host
+5. Prompt you for your Chrome extension ID
+
+To get your extension ID:
+1. Open Chrome → `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top right)
+3. Click "Load unpacked" and select the `extension` folder
+4. Copy the ID shown under the extension name
 
 ## Usage
 
