@@ -1,0 +1,9 @@
+{
+  "name": "com.claudebot.audio_briefer",
+  "description": "Audio Webpage Briefer - Summarize pages and generate audio",
+  "path": "/usr/local/bin/audio-briefer-host.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://EXTENSION_ID_HERE/"
+  ]
+}
